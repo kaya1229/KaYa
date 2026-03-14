@@ -153,7 +153,7 @@ input[type=file]{display:none}
 /* ── 프레임 빌더 ── */
 #frame-builder{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .fslot{
-  aspect-ratio:3/4;border-radius:var(--rs);
+  border-radius:var(--rs);
   border:2px dashed var(--sky2);background:var(--sky0);
   position:relative;overflow:hidden;transition:border-color .2s;
   cursor:pointer;
@@ -595,7 +595,6 @@ document.getElementById('deco-date').value=todayStr;
 /* ══════════ NAV ══════════ */
 function goTo(n){
   for(let i=0;i<5;i++) document.getElementById(`sc${i}`).classList.toggle('active',i===n);
-  // 스텝(0~3만 표시)
   for(let i=0;i<4;i++){
     const si=document.getElementById(`si${i}`),sn=document.getElementById(`sn${i}`);
     si.className='si'+(i===n?' on':i<n?' dn':'');
@@ -605,9 +604,18 @@ function goTo(n){
   ['sl01','sl12','sl23'].forEach((id,idx)=>{
     document.getElementById(id).classList.toggle('dn',idx<n);
   });
+  if(n===1) setFslotRatio();
   if(n===2) initCam();
   if(n===3){ S.picked.clear(); updatePickCnt(); buildResult(); }
   if(n===4) renderAlbum();
+}
+
+// fslot 비율을 카메라 실제 비율로 맞춤
+function setFslotRatio(){
+  const v=document.getElementById('video');
+  let ar='4/3';
+  if(v.videoWidth && v.videoHeight) ar=`${v.videoWidth}/${v.videoHeight}`;
+  for(let i=0;i<4;i++) document.getElementById(`fs${i}`).style.aspectRatio=ar;
 }
 
 /* ══════════ STEP 0 ══════════ */
@@ -635,14 +643,11 @@ function renderStrip(){
 function openSlotModal(idx){
   S.modalSlot=idx;
   document.getElementById('slot-modal-title-txt').textContent=`컷 ${idx+1} 편집`;
-  // 카메라 실제 비율로 모달 비율 맞추기
+  // fslot과 동일한 비율 사용
   const v=document.getElementById('video');
   const mc=document.getElementById('slot-modal-canvas');
-  if(v.videoWidth && v.videoHeight){
-    mc.style.aspectRatio=`${v.videoWidth}/${v.videoHeight}`;
-  } else {
-    mc.style.aspectRatio='4/3'; // 기본값
-  }
+  mc.style.aspectRatio=(v.videoWidth && v.videoHeight)
+    ? `${v.videoWidth}/${v.videoHeight}` : '4/3';
   renderModalCanvas(idx);
   document.getElementById('slot-modal').classList.add('open');
 }
@@ -699,26 +704,22 @@ function renderMiniSlot(idx){
   mc.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;';
   slot.appendChild(mc);
   function draw(){
-    const rect=slot.getBoundingClientRect();
-    const W=rect.width||slot.offsetWidth;
-    const H=rect.height||slot.offsetHeight;
-    if(!W||!H){ setTimeout(draw,60); return; }
-    // 카메라 비율로 그리기 (좌표계 일치)
-    const v=document.getElementById('video');
-    const vW=v.videoWidth||W, vH=v.videoHeight||H;
-    mc.width=Math.round(W); mc.height=Math.round(H);
+    const W=slot.getBoundingClientRect().width||slot.offsetWidth||100;
+    const H=slot.getBoundingClientRect().height||slot.offsetHeight||75;
+    if(W<2||H<2){ setTimeout(draw,60); return; }
+    mc.width=Math.round(W*2); mc.height=Math.round(H*2); // 레티나 대응
+    mc.style.width='100%'; mc.style.height='100%';
     const ctx=mc.getContext('2d');
     ctx.clearRect(0,0,mc.width,mc.height);
+    // fslot·모달·오버레이 모두 같은 비율 → % 그대로 사용
     S.slots[idx].forEach(entry=>{
       const cel=S.celebs[entry.ci]; if(!cel) return;
-      // 모달에서 저장된 %는 videoWidth 기준이므로 같은 비율로 렌더
-      const scaleX=mc.width/vW, scaleY=mc.height/vH;
-      const cw=(vW*(entry.w/100))*scaleX;
+      const cw=mc.width*(entry.w/100);
       const ch=cw*(cel.img.height/cel.img.width);
-      ctx.drawImage(cel.img, (vW*(entry.x/100))*scaleX, (vH*(entry.y/100))*scaleY, cw, ch);
+      ctx.drawImage(cel.img, mc.width*(entry.x/100), mc.height*(entry.y/100), cw, ch);
     });
   }
-  setTimeout(draw,60);
+  setTimeout(draw,80);
 }
 
 function openPickerForModal(){
@@ -853,16 +854,20 @@ function fullReset(){
   for(let i=0;i<4;i++){ const th=document.getElementById(`th${i}`); th.innerHTML=""; th.classList.remove("taken"); }
   document.getElementById("shot-lbl").textContent="0 / 4 촬영";
   document.getElementById("cam-pill").textContent="컷 1 준비";
-  document.getElementById("btn-shoot").disabled=false;
-  document.getElementById("btn-done").disabled=true;
+  const bshoot=document.getElementById('btn-shoot');
+  const bdone=document.getElementById('btn-done');
+  if(bshoot){ bshoot.disabled=false; bshoot.style.pointerEvents=''; bshoot.style.opacity=''; }
+  if(bdone){ bdone.disabled=true; }
   S.celebs=[]; S.slots=[[],[],[],[]]; S.decos=[];
   document.getElementById('celeb-strip').innerHTML='';
   document.getElementById('btn0').disabled=true;
   document.getElementById('deco-list').innerHTML='';
   for(let i=0;i<4;i++){
     const slot=document.getElementById(`fs${i}`);
-    slot.querySelectorAll('.mini-thumb').forEach(e=>e.remove());
+    slot.querySelectorAll('.mini-thumb,.mini-canvas').forEach(e=>e.remove());
+    slot.style.aspectRatio=''; // 비율 초기화
   }
+  S.shotRatio=null;
   goTo(0);
 }
 
