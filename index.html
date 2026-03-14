@@ -201,7 +201,7 @@ input[type=file]{display:none}
   margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;
 }
 .slot-modal-canvas{
-  width:100%;aspect-ratio:4/3;border-radius:var(--rs);
+  width:100%;border-radius:var(--rs);
   border:2px solid var(--sky1);background:var(--sky0);
   position:relative;overflow:hidden;margin-bottom:12px;
 }
@@ -635,6 +635,14 @@ function renderStrip(){
 function openSlotModal(idx){
   S.modalSlot=idx;
   document.getElementById('slot-modal-title-txt').textContent=`컷 ${idx+1} 편집`;
+  // 카메라 실제 비율로 모달 비율 맞추기
+  const v=document.getElementById('video');
+  const mc=document.getElementById('slot-modal-canvas');
+  if(v.videoWidth && v.videoHeight){
+    mc.style.aspectRatio=`${v.videoWidth}/${v.videoHeight}`;
+  } else {
+    mc.style.aspectRatio='4/3'; // 기본값
+  }
   renderModalCanvas(idx);
   document.getElementById('slot-modal').classList.add('open');
 }
@@ -691,19 +699,26 @@ function renderMiniSlot(idx){
   mc.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;';
   slot.appendChild(mc);
   function draw(){
-    const W=slot.getBoundingClientRect().width||slot.offsetWidth||100;
-    const H=slot.getBoundingClientRect().height||slot.offsetHeight||133;
-    if(!W||!H){ setTimeout(draw,50); return; }
+    const rect=slot.getBoundingClientRect();
+    const W=rect.width||slot.offsetWidth;
+    const H=rect.height||slot.offsetHeight;
+    if(!W||!H){ setTimeout(draw,60); return; }
+    // 카메라 비율로 그리기 (좌표계 일치)
+    const v=document.getElementById('video');
+    const vW=v.videoWidth||W, vH=v.videoHeight||H;
     mc.width=Math.round(W); mc.height=Math.round(H);
     const ctx=mc.getContext('2d');
     ctx.clearRect(0,0,mc.width,mc.height);
     S.slots[idx].forEach(entry=>{
       const cel=S.celebs[entry.ci]; if(!cel) return;
-      const cw=mc.width*(entry.w/100), ch=cw*(cel.img.height/cel.img.width);
-      ctx.drawImage(cel.img, mc.width*(entry.x/100), mc.height*(entry.y/100), cw, ch);
+      // 모달에서 저장된 %는 videoWidth 기준이므로 같은 비율로 렌더
+      const scaleX=mc.width/vW, scaleY=mc.height/vH;
+      const cw=(vW*(entry.w/100))*scaleX;
+      const ch=cw*(cel.img.height/cel.img.width);
+      ctx.drawImage(cel.img, (vW*(entry.x/100))*scaleX, (vH*(entry.y/100))*scaleY, cw, ch);
     });
   }
-  setTimeout(draw,30);
+  setTimeout(draw,60);
 }
 
 function openPickerForModal(){
@@ -759,7 +774,10 @@ function runOverlay(){
   const v=document.getElementById('video'),oc=document.getElementById('cam-cv'),ctx=oc.getContext('2d');
   function frame(){
     if(!v.videoWidth){ S.raf=requestAnimationFrame(frame); return; }
-    oc.width=v.videoWidth; oc.height=v.videoHeight;
+    // canvas 해상도를 video 실제 해상도에 맞춤
+    if(oc.width!==v.videoWidth || oc.height!==v.videoHeight){
+      oc.width=v.videoWidth; oc.height=v.videoHeight;
+    }
     ctx.clearRect(0,0,oc.width,oc.height);
     getSlotCelebs(S.cur).forEach(e=>{
       const c=S.celebs[e.ci]; if(!c) return;
@@ -799,11 +817,11 @@ async function shoot(){
   ctx.filter=FILTERS[S.filter]||'';
   ctx.save(); ctx.scale(-1,1); ctx.drawImage(v,-hc.width,0,hc.width,hc.height); ctx.restore();
   ctx.filter='';
-  getSlotCelebs(S.cur).forEach(e=>{
-    const c=S.celebs[e.ci]; if(!c) return;
-    const cw=hc.width*(e.w/100),ch=cw*(c.img.height/c.img.width);
-    ctx.drawImage(c.img,hc.width*(e.x/100),hc.height*(e.y/100),cw,ch);
-  });
+  // overlay canvas를 그대로 합성 (별도 좌표 계산 없이 이중 방지)
+  const oc=document.getElementById('cam-cv');
+  if(oc.width>0 && oc.height>0){
+    ctx.drawImage(oc,0,0,hc.width,hc.height);
+  }
   const url=hc.toDataURL('image/jpeg',.92);
   S.shots[S.cur]=url;
   const th=document.getElementById(`th${S.cur}`); th.innerHTML=`<img src="${url}">`; th.classList.add('taken');
