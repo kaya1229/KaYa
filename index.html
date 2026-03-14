@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>스타네컷</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --sky0:#F0F7FF;--sky1:#D9ECFF;--sky2:#B3D6FF;--sky3:#7DB8F5;
@@ -19,7 +19,7 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{font-size:16px}
 body{
-  font-family:'Nunito','Noto Sans KR',sans-serif;
+  font-family:'Jua','Noto Sans KR',sans-serif;
   background:var(--sky0);
   min-height:100vh;overflow-x:hidden;color:var(--ink);
 }
@@ -114,7 +114,7 @@ input[type=file]{display:none}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:5px;
   cursor:pointer;border:none;
-  font-family:'Nunito','Noto Sans KR',sans-serif;
+  font-family:'Jua','Noto Sans KR',sans-serif;
   font-size:.85rem;font-weight:700;border-radius:50px;
   padding:11px 22px;transition:all .15s;
 }
@@ -251,7 +251,7 @@ input[type=file]{display:none}
   border:1.5px solid var(--sky1);background:var(--cloud);
   font-size:.76rem;font-weight:700;color:var(--ink2);
   cursor:pointer;transition:all .15s;white-space:nowrap;
-  font-family:'Nunito','Noto Sans KR',sans-serif;
+  font-family:'Jua','Noto Sans KR',sans-serif;
 }
 .pill:hover{border-color:var(--sky3);color:var(--ink)}
 .pill.on{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -267,7 +267,7 @@ input[type=file]{display:none}
   flex:1;padding:9px 14px;border-radius:50px;
   border:1.5px solid var(--sky1);background:var(--sky0);
   font-size:.82rem;color:var(--ink);outline:none;
-  font-family:'Nunito','Noto Sans KR',sans-serif;font-weight:600;
+  font-family:'Jua','Noto Sans KR',sans-serif;font-weight:600;
 }
 .deco-inp:focus{border-color:var(--sky3)}
 .deco-list{display:flex;flex-direction:column;gap:5px;margin-top:4px}
@@ -352,7 +352,7 @@ input[type=file]{display:none}
 /* ── 피커 모달 ── */
 .modal-bg{
   display:none;position:fixed;inset:0;
-  background:rgba(30,50,80,.45);z-index:200;
+  background:rgba(30,50,80,.45);z-index:600;
   align-items:flex-end;justify-content:center;
   backdrop-filter:blur(5px);
 }
@@ -807,6 +807,7 @@ async function shoot(){
 // 다시 찍기 — 같은 프레임, 촬영만 리셋
 function reshot(){
   if(S.stream){ S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; }
+  cancelAnimationFrame(S.raf); S.raf=null;
   S.shots=[null,null,null,null]; S.cur=0; S.busy=false;
   for(let i=0;i<4;i++){ const th=document.getElementById(`th${i}`); th.innerHTML=''; th.classList.remove('taken'); }
   document.getElementById('shot-lbl').textContent='0 / 4 촬영';
@@ -818,7 +819,14 @@ function reshot(){
 
 // 처음부터 — 전체 리셋
 function fullReset(){
-  reshot();
+  if(S.stream){ S.stream.getTracks().forEach(t=>t.stop()); S.stream=null; }
+  cancelAnimationFrame(S.raf); S.raf=null;
+  S.shots=[null,null,null,null]; S.cur=0; S.busy=false;
+  for(let i=0;i<4;i++){ const th=document.getElementById(`th${i}`); th.innerHTML=""; th.classList.remove("taken"); }
+  document.getElementById("shot-lbl").textContent="0 / 4 촬영";
+  document.getElementById("cam-pill").textContent="컷 1 준비";
+  document.getElementById("btn-shoot").disabled=false;
+  document.getElementById("btn-done").disabled=true;
   S.celebs=[]; S.slots=[[],[],[],[]]; S.decos=[];
   document.getElementById('celeb-strip').innerHTML='';
   document.getElementById('btn0').disabled=true;
@@ -861,7 +869,7 @@ function buildResult(){
 
   const FW=220, SPR=18, PAD=8, GAP=5;
   const SW=FW-PAD*2;
-  const SH=Math.round(SW*(3/4)); // 4:3 사진
+  const SH=Math.round(SW*(4/3)); // 3:4 세로 비율 (인생네컷 표준)
   const FOOTER_H=SPR+22;
   const totalH=SPR+PAD+(SH+GAP)*4-GAP+PAD+FOOTER_H;
 
@@ -893,8 +901,8 @@ function buildResult(){
         // 슬롯 배경
         ctx.fillStyle=th.shot; ctx.fillRect(x,y,SW,SH);
         if(img){
-          // 사진 꽉 채우기 (짤리지 않게 contain 방식)
-          const scale=Math.min(SW/img.width,SH/img.height);
+          // cover 방식 — 슬롯을 꽉 채우고 중앙 기준으로 크롭
+          const scale=Math.max(SW/img.width,SH/img.height);
           const iw=img.width*scale,ih=img.height*scale;
           const ox=x+SW/2-iw/2,oy=y+SH/2-ih/2;
           ctx.save();
