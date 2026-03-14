@@ -975,16 +975,20 @@ function buildResult(){
           const iw=img.width*scale,ih=img.height*scale;
           const ox=x+SW/2-iw/2,oy=y+SH/2-ih/2;
           ctx.save();
-          ctx.rect(x,y,SW,SH); ctx.clip();
+          ctx.beginPath();
+          ctx.rect(x,y,SW,SH);
+          ctx.clip();
           ctx.drawImage(img,ox,oy,iw,ih);
           ctx.restore();
         }
-        // 누끼 오버레이
+        // 누끼 오버레이 — beginPath 필수 (없으면 path 누적으로 클립 범위 깨짐)
         S.slots[si].forEach(entry=>{
           const cel=S.celebs[entry.ci]; if(!cel) return;
           const cw=SW*(entry.w/100),ch=cw*(cel.img.height/cel.img.width);
           ctx.save();
-          ctx.rect(x,y,SW,SH); ctx.clip();
+          ctx.beginPath();
+          ctx.rect(x,y,SW,SH);
+          ctx.clip();
           ctx.drawImage(cel.img,x+SW*(entry.x/100),y+SH*(entry.y/100),cw,ch);
           ctx.restore();
         });
