@@ -605,10 +605,37 @@ function goTo(n){
   ['sl01','sl12','sl23'].forEach((id,idx)=>{
     document.getElementById(id).classList.toggle('dn',idx<n);
   });
-  if(n===1) setFslotRatio();
+  if(n===1) initCamAndSetRatio(); // 슬롯 화면 진입 시 카메라 미리 켜서 비율 확정
   if(n===2) initCam();
   if(n===3){ S.picked.clear(); updatePickCnt(); buildResult(); }
   if(n===4) renderAlbum();
+}
+
+// 슬롯 화면 진입 시 카메라 미리 켜서 비율 확정
+async function initCamAndSetRatio(){
+  setFslotRatio(); // 일단 현재 값으로 먼저 적용
+  if(!S.stream){
+    try{
+      S.stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:'user', width:{ideal:1280}, height:{ideal:720}},
+        audio:false
+      });
+      const v=document.getElementById('video');
+      v.srcObject=S.stream;
+      await v.play();
+      // videoWidth 확정될 때까지 대기
+      const waitRatio=()=>{
+        if(v.videoWidth && v.videoHeight){
+          setFslotRatio(); // 실제 비율로 업데이트
+        } else {
+          setTimeout(waitRatio,50);
+        }
+      };
+      waitRatio();
+    } catch(e){ /* 권한 없으면 무시, 촬영 화면에서 다시 요청 */ }
+  } else {
+    setFslotRatio(); // 이미 켜져있으면 바로 적용
+  }
 }
 
 // fslot + 모달 비율을 카메라 실제 비율로 맞춤
@@ -771,7 +798,7 @@ function doResize(e,container,entry,el){
 
 /* ══════════ STEP 2: 카메라 ══════════ */
 async function initCam(){
-  if(S.stream) return;
+  if(S.stream){ runOverlay(); return; } // 이미 켜져있으면 overlay만 재시작
   try{
     // 모바일 세로 대응: width/height 둘 다 ideal 지정
     S.stream=await navigator.mediaDevices.getUserMedia({
