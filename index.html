@@ -571,6 +571,7 @@ const S = {
   album:[],
   albumPage:0,
   modalSlot:null,        // 현재 확대 편집 중인 슬롯 idx
+  camAR:null,            // 카메라 aspect-ratio 문자열
 };
 const PER_PAGE = 4; // 앨범 한 페이지에 4장
 
@@ -610,12 +611,16 @@ function goTo(n){
   if(n===4) renderAlbum();
 }
 
-// fslot 비율을 카메라 실제 비율로 맞춤
+// fslot + 모달 비율을 카메라 실제 비율로 맞춤
 function setFslotRatio(){
   const v=document.getElementById('video');
-  let ar='4/3';
+  let ar='16/9'; // 모바일 기본값
   if(v.videoWidth && v.videoHeight) ar=`${v.videoWidth}/${v.videoHeight}`;
   for(let i=0;i<4;i++) document.getElementById(`fs${i}`).style.aspectRatio=ar;
+  // 열려있는 모달도 업데이트
+  const mc=document.getElementById('slot-modal-canvas');
+  if(mc) mc.style.aspectRatio=ar;
+  S.camAR=ar; // 나중에 모달 열 때 사용
 }
 
 /* ══════════ STEP 0 ══════════ */
@@ -646,8 +651,13 @@ function openSlotModal(idx){
   // fslot과 동일한 비율 사용
   const v=document.getElementById('video');
   const mc=document.getElementById('slot-modal-canvas');
-  mc.style.aspectRatio=(v.videoWidth && v.videoHeight)
-    ? `${v.videoWidth}/${v.videoHeight}` : '4/3';
+  if(v.videoWidth && v.videoHeight){
+    mc.style.aspectRatio=`${v.videoWidth}/${v.videoHeight}`;
+  } else if(S.camAR){
+    mc.style.aspectRatio=S.camAR;
+  } else {
+    mc.style.aspectRatio='16/9';
+  }
   renderModalCanvas(idx);
   document.getElementById('slot-modal').classList.add('open');
 }
@@ -763,9 +773,23 @@ function doResize(e,container,entry,el){
 async function initCam(){
   if(S.stream) return;
   try{
-    S.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280}},audio:false});
-    const v=document.getElementById('video'); v.srcObject=S.stream; await v.play();
-    runOverlay();
+    // 모바일 세로 대응: width/height 둘 다 ideal 지정
+    S.stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'user', width:{ideal:1280}, height:{ideal:720}},
+      audio:false
+    });
+    const v=document.getElementById('video');
+    v.srcObject=S.stream; await v.play();
+    // videoWidth/Height가 확정된 후 슬롯 비율 맞춤
+    const waitRatio=()=>{
+      if(v.videoWidth && v.videoHeight){
+        setFslotRatio();
+        runOverlay();
+      } else {
+        setTimeout(waitRatio, 50);
+      }
+    };
+    waitRatio();
   }catch(err){ alert('카메라 권한이 필요합니다.\nhttps:// 환경에서 실행해 주세요.'); }
 }
 
@@ -829,7 +853,10 @@ async function shoot(){
   S.cur++;
   document.getElementById('shot-lbl').textContent=`${S.cur} / 4 촬영`;
   document.getElementById('cam-pill').textContent=S.cur<4?`컷 ${S.cur+1} 준비`:'촬영 완료! ✦';
-  if(S.cur>=4){ document.getElementById('btn-done').disabled=false; document.getElementById('btn-shoot').disabled=true; }
+  if(S.cur>=4){
+    document.getElementById('btn-done').removeAttribute('disabled');
+    document.getElementById('btn-shoot').setAttribute('disabled','');
+  }
   S.busy=false; runOverlay();
 }
 
@@ -841,8 +868,10 @@ function reshot(){
   for(let i=0;i<4;i++){ const th=document.getElementById(`th${i}`); th.innerHTML=''; th.classList.remove('taken'); }
   document.getElementById('shot-lbl').textContent='0 / 4 촬영';
   document.getElementById('cam-pill').textContent='컷 1 준비';
-  document.getElementById('btn-shoot').disabled=false;
-  document.getElementById('btn-done').disabled=true;
+  const bs=document.getElementById('btn-shoot');
+  const bd=document.getElementById('btn-done');
+  if(bs) bs.removeAttribute('disabled');
+  if(bd) bd.setAttribute('disabled','');
   goTo(2);
 }
 
@@ -856,8 +885,9 @@ function fullReset(){
   document.getElementById("cam-pill").textContent="컷 1 준비";
   const bshoot=document.getElementById('btn-shoot');
   const bdone=document.getElementById('btn-done');
-  if(bshoot){ bshoot.disabled=false; bshoot.style.pointerEvents=''; bshoot.style.opacity=''; }
-  if(bdone){ bdone.disabled=true; }
+  if(bshoot){ bshoot.removeAttribute('disabled'); bshoot.style.pointerEvents=''; bshoot.style.opacity=''; }
+  if(bdone){ bdone.setAttribute('disabled',''); }
+  S.camAR=null;
   S.celebs=[]; S.slots=[[],[],[],[]]; S.decos=[];
   document.getElementById('celeb-strip').innerHTML='';
   document.getElementById('btn0').disabled=true;
