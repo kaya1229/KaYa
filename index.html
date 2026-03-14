@@ -683,19 +683,25 @@ function renderModalCanvas(idx){
 // 미니 슬롯 썸네일 업데이트 (모달 닫은 후)
 function renderMiniSlot(idx){
   const slot=document.getElementById(`fs${idx}`);
-  // 기존 미리보기 이미지 제거
-  slot.querySelectorAll('.mini-thumb').forEach(e=>e.remove());
+  slot.querySelectorAll('.mini-thumb,.mini-canvas').forEach(e=>e.remove());
   if(!S.slots[idx].length) return;
-  // 첫 번째 누끼 썸네일 표시
-  const entry=S.slots[idx][0];
-  const cel=S.celebs[entry.ci]; if(!cel) return;
-  const img=document.createElement('img');
-  img.className='mini-thumb';
-  img.src=cel.img.src;
-  img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;z-index:1;opacity:.5;';
-  // 배치 위치 반영
-  img.style.objectPosition=`${entry.x}% ${entry.y}%`;
-  slot.appendChild(img);
+  // canvas로 실제 배치 그대로 미리보기
+  const mc=document.createElement('canvas');
+  mc.className='mini-canvas';
+  mc.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;';
+  slot.appendChild(mc);
+  // slot 크기 얻기 (비동기로 layout 완료 후)
+  requestAnimationFrame(()=>{
+    const W=slot.offsetWidth||100, H=slot.offsetHeight||133;
+    mc.width=W; mc.height=H;
+    const ctx=mc.getContext('2d');
+    ctx.clearRect(0,0,W,H);
+    S.slots[idx].forEach(entry=>{
+      const cel=S.celebs[entry.ci]; if(!cel) return;
+      const cw=W*(entry.w/100), ch=cw*(cel.img.height/cel.img.width);
+      ctx.drawImage(cel.img, W*(entry.x/100), H*(entry.y/100), cw, ch);
+    });
+  });
 }
 
 function openPickerForModal(){
@@ -869,7 +875,7 @@ function buildResult(){
 
   const FW=220, SPR=18, PAD=8, GAP=5;
   const SW=FW-PAD*2;
-  const SH=Math.round(SW*(4/3)); // 3:4 세로 비율 (인생네컷 표준)
+  const SH=Math.round(SW*(3/4)); // 4:3 가로 비율 (카메라 촬영 비율에 맞춤)
   const FOOTER_H=SPR+22;
   const totalH=SPR+PAD+(SH+GAP)*4-GAP+PAD+FOOTER_H;
 
